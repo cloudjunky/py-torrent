@@ -10,13 +10,10 @@ def ip_location(ip_address):
     location = [gir['country_name'], gir['city']]
   return location
 
-def read_hash_from_file(f):
+def read_hash_from_file(line):
   #Read a line from the file and return a hash.
-  #hash_array = ['85e54b554ef2f68ba675b0ffd2e96013451ffc46','1d204862cd639f1ef6baaf1a89afdfab9274a926','099774cef0302155d8172e2e2231de73d8fb586e','a60e0022419f4601bdda7c98bd5e99fee29c074f']
-  #for line in hash_array:
-  #  h = line.split('|')
-  #  torrent_hash = h[len(h)-1]
-  torrent_hash = "85e54b554ef2f68ba675b0ffd2e96013451ffc46"
+  h = line.split('|')
+  torrent_hash = h[len(h)-1]
   return torrent_hash
 
 def total_hashes(f):
@@ -40,16 +37,13 @@ def create_handle(ses,link,params):
   return handle
 
 def get_metadata(handle):
-  print handle
-  err = 0
   print 'downloading metadata...'
-  while (not handle.has_metadata()):
-    print err
-    time.sleep(1)
-    err = err + 1
+  handle.metadata()
+  #while (not handle.has_metadata()):
+  #  print err
+  #  time.sleep(1)
+  #  err = err + 1
   print 'got metadata, starting torrent download...'
-  files = handle.get_torrent_info()
-  print files
   #return handle.metadata()
 
 def get_tracker_information(handle):
@@ -63,7 +57,8 @@ def get_file_information(handle):
   files = handle.get_torrent_info()
   print "Total Files:%d" % files.num_files()
   for f in files.files():
-    print "File Base:%s" % f.path
+    print "File Path:%s" % f.path
+    print "File Offset:%s" % f.offset
     print "File Size:%f" % (f.size/1024)
 
 def get_torrent_summary_information(handle):
@@ -75,6 +70,7 @@ def get_torrent_summary_information(handle):
   print "Num Seeds:", status.num_seeds
   print "Active:", status.active_time
   print "All Time Downloaded:", status.all_time_download
+  print "File Information", get_file_information(handle)
 
 def get_peer_details(handle):
   #Get peer information
@@ -82,10 +78,7 @@ def get_peer_details(handle):
   print "Peers: %d" % len(pe)
 
   for p in handle.get_peer_info():
-    #print "Client:%s IP:%s Progress:%s" % (p.client,p.ip,p.downloading_total)
-    gir = gi.record_by_addr(p.ip[0])
-    if gir != None:
-      print "%s %s" % (gir['country_name'], gir['city'])
+    print "Client:%s IP:%s Country:%s Progress:%s" % (p.client,p.ip,ip_location(p.ip[0]),p.downloading_total)
     #print p.flags
     #print p.down_speed
     #print p.last_active
@@ -110,13 +103,36 @@ def download_torrent(handle):
       print p.total_upload
 
 params = { 'save_path': './'}
+num_tries = 3
+torrent_file = 'complete'
+#hash_array = ['85e54b554ef2f68ba675b0ffd2e96013451ffc46','1d204862cd639f1ef6baaf1a89afdfab9274a926','099774cef0302155d8172e2e2231de73d8fb586e','a60e0022419f4601bdda7c98bd5e99fee29c074f']
 
-# Create a session, get a handle, grab a hash and get peers
-f = open('complete','r')
-my_hash = read_hash_from_file(f)
-link = create_magnet_url(my_hash)
-print link
-ses = create_session()
-handle = create_handle(ses,link,params)
-metadata = get_metadata(handle)
+f = open(torrent_file,'r')
+
+for line in f:
+  print line
+  tries = 0
+  # Create a session, get a handle, grab a hash and get peers
+  my_hash = read_hash_from_file(line)
+  link = create_magnet_url(my_hash)
+  print my_hash
+  print link
+  ses = create_session()
+  handle = create_handle(ses,link,params)
+
+  while tries < num_tries:
+  #  get_metadata(handle)
+    print "Calling metadata"
+    handle.has_metadata()
+    time.sleep(30) #Give metadata 10s to timeout
+    if (not handle.has_metadata()):
+      tries = tries + 1
+    else:
+      print "Boom got metadata"
+      #break
+      #Print the file info
+      files = get_file_information(handle)
+      peers = get_peer_details(handle)
+      print get_torrent_summary_information(handle)
+
 print "done"
