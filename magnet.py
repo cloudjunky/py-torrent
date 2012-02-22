@@ -1,6 +1,7 @@
 import libtorrent as lt
 import time
 import GeoIP
+import pickle
 
 def ip_location(ip_address):
   #Receive an and return Country, City and Latitude/Longitude
@@ -102,20 +103,30 @@ def download_torrent(handle):
       print p.total_download
       print p.total_upload
 
+
 params = { 'save_path': './'}
 num_tries = 3
-torrent_file = 'complete'
-#hash_array = ['85e54b554ef2f68ba675b0ffd2e96013451ffc46','1d204862cd639f1ef6baaf1a89afdfab9274a926','099774cef0302155d8172e2e2231de73d8fb586e','a60e0022419f4601bdda7c98bd5e99fee29c074f']
 
-f = open(torrent_file,'r')
+torrent_file = 'complete'
+pickle_file = 'top100.bin'
+
+use_pickle = 1 
+
+if pickle_file:
+    f = pickle.load(open(pickle_file))
+elif (not pickle_file):
+    f = open(torrent_file,'r')
 
 for line in f:
-  print line
+  #print line
   tries = 0
   # Create a session, get a handle, grab a hash and get peers
-  my_hash = read_hash_from_file(line)
-  link = create_magnet_url(my_hash)
-  print my_hash
+  if pickle_file:
+      link = line['downloadLink']
+  elif (not pickle_file):
+      my_hash = read_hash_from_file(line)
+      link = create_magnet_url(my_hash)
+
   print link
   ses = create_session()
   handle = create_handle(ses,link,params)
