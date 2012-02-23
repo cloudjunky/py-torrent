@@ -26,7 +26,7 @@ class MagnetDaemon:
         # self.session.listen_on(8888, 9999)
         self.session.start_dht()
         # self.session.stop_upnp()
-        self.session.stop_natpmp()
+        # self.session.stop_natpmp()
         self.mongconn = pymongo.Connection()
         self.db = self.mongconn['magnet']
         self.peers = self.db.peers
@@ -45,7 +45,6 @@ class MagnetDaemon:
             return lt.add_files(self.session, path, params)
 
     def create_magnet_url(self, info_hash):
-
         trackers = [
             'http://tracker.openbittorent.org/announce',
             'http://tracker.publicbt.org/announce',
@@ -70,7 +69,7 @@ class MagnetDaemon:
     def add_hashes_from_dump(self, path):
         print 'Reading', path
         for no, line in enumerate(open(path)):
-            if no == 50:
+            if no == 500:
                 break
             line = line.strip()
             info_hash = self.hash_from_line(line)
@@ -82,45 +81,54 @@ class MagnetDaemon:
 
     def monitor(self):
         while 1:
-            # for torrent in self.torrents:
-            #     print torrent.handle.status().distributed_full_copies,
-            #     print torrent.handle.status().current_tracker,
-            #     print torrent.handle.status().num_seeds,
-            #     print torrent.handle.status().list_peers,
-            #     print torrent.handle.piece_availability(),
-            #     print torrent.handle.has_metadata(),
-            #     print
+            for torrent in self.torrents:
+                # print torrent.handle.status().distributed_full_copies,
+                # print torrent.handle.status().current_tracker,
+                # print torrent.handle.status().num_seeds,
+                # print torrent.handle.status().list_peers,
+                # print torrent.handle.piece_availability(),
+                # print torrent.handle.has_metadata(),
+                # print
 
-            with_metadata = [t for t in self.torrents if t.handle.has_metadata()]
-            for torrent in with_metadata:
-                print torrent.handle.name()
+                # if torrent.handle.is_paused():
+                #     continue
+                if not torrent.handle.has_metadata():
+                    continue
                 self.add_peers_to_db(torrent)
+
+                # Now remove this torrent so we can leave room for others
+                self.session.remove_torrent(torrent.handle)
+                self.torrents.remove(torrent)
 
             print 80 * '-'
             time.sleep(1)
 
     def add_peers_to_db(self, torrent):
-        for p in torrent.peers():
-            print " - Client:%s IP:%s Progress:%s" % (p.client, p.ip, p.downloading_total)
+        peers = torrent.peers()
+        print len(peers), torrent.handle.name()
 
-            peer = self.peers.find_one({'addr': p.ip})
+        for p in peers:
+            # print ' - %s %s' % (p.ip, p.client)
+
+            addr = p.ip[0]
+            peer = self.peers.find_one({'addr': addr})
             if not peer:
                 peer = {
-                    'addr': p.ip,
+                    'addr': addr,
                     'torrents': []
                     }
 
             peer['client'] = p.client
-            ih = torrent.info_hash()
+            ih = str(torrent.handle.info_hash())
             if ih not in peer['torrents']:
-                peer['torrents'].append(torrent.handle.info_hash())
+                peer['torrents'].append(ih)
             self.peers.save(peer)
 
 
 def main():
     md = MagnetDaemon()
-    md.add_from_hash('2ded86af7c0cce8224262ba703191bf7d8537a5d')
-    md.add_from_hash('368a8beaaced1572f44ad5aae0685ed6130d983c')
+    # md.add_from_hash('2ded86af7c0cce8224262ba703191bf7d8537a5d')
+    # md.add_from_hash('368a8beaaced1572f44ad5aae0685ed6130d983c')
     md.add_hashes_from_dump('complete')
     md.monitor()
 
